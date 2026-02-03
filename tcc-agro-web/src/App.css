@@ -1,0 +1,74 @@
+/* Removemos margens padrão do navegador */
+body, html, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden; /* Evita barra de rolagem na página inteira */
+  font-family: 'Segoe UI', Roboto, sans-serif;
+}
+
+/* O container principal que segura Barra + Mapa */
+.dashboard-container {
+  display: flex; /* Coloca os filhos um ao lado do outro */
+  height: 100vh; /* 100% da altura da tela */
+  width: 100vw;
+}
+
+/* A Barra Lateral */
+.sidebar {
+  width: 320px; /* Largura fixa */
+  background-color: white;
+  padding: 20px;
+  box-shadow: 2px 0 10px rgba(0,0,0,0.1); /* Sombra para destacar */
+  z-index: 10; /* Fica por cima do mapa */
+  overflow-y: auto; /* Se tiver muitos cards, cria rolagem só aqui */
+  display: flex;
+  flex-direction: column;
+  gap: 15px; /* Espaço entre os itens */
+}
+
+/* Área do Mapa */
+.map-area {
+  flex: 1; /* Ocupa todo o espaço que sobrar */
+  height: 100%;
+  position: relative;
+}
+
+/* Título e Cabeçalho */
+.header-content {
+  margin-bottom: 20px;
+  border-bottom: 2px solid #f0f2f5;
+  padding-bottom: 10px;
+}
+
+h1 {
+  color: #1565C0;
+  font-size: 20px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+p.subtitle {
+  color: #90a4ae;
+  font-size: 13px;
+  margin: 5px 0 0 0;
+}
+
+/* --- RESPONSIVO (CELULAR) --- */
+/* No celular, a barra vai para baixo e o mapa fica em cima */
+@media (max-width: 768px) {
+  .dashboard-container {
+    flex-direction: column-reverse; /* Inverte a ordem */
+  }
+  .sidebar {
+    width: 100%; /* Largura total */
+    height: 45%; /* Altura quase metade */
+    box-sizing: border-box;
+  }
+  .map-area {
+    height: 55%; /* O resto para o mapa */
+  }
+}
