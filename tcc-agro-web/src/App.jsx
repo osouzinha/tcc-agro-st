@@ -174,6 +174,7 @@ function App() {
         {/* CARDS (Reduzidos para caber a lista) */}
         {!modoHistorico && (
           <>
+            <Card titulo="Vazão" valor={dados.vazao?.toFixed(1)} unidade="L/min" cor="blue" />
             <Card titulo="Taxa (L/ha)" valor={dados.taxa?.toFixed(1)} unidade="" cor={dados.taxa > 110 ? "red" : "blue"} />
             <Card titulo="Velocidade" valor={dados.velocidade?.toFixed(1)} unidade="km/h" />
           </>
