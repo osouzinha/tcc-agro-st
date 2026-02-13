@@ -1,79 +1,90 @@
-import { MapContainer, TileLayer, Marker, Popup, useMap, CircleMarker } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Circle, Tooltip, useMap } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
+import iconShadow from 'leaflet/dist/images/marker-shadow.png';
 
-const tractorIcon = new L.Icon({
-  iconUrl: 'https://cdn-icons-png.flaticon.com/512/2332/2332139.png',
-  iconSize: [45, 45],
-  iconAnchor: [22, 44],
-  popupAnchor: [0, -45]
-})
+// --- CONFIGURAÇÃO DO ÍCONE ---
+const tratorIcon = new L.Icon({
+  iconUrl: '/trator.png', 
+  shadowUrl: iconShadow,
+  iconSize:     [50, 50], 
+  iconAnchor:   [25, 25], 
+  popupAnchor:  [0, -40] // Ajustei para o balão aparecer acima do trator
+});
 
-function RecenterAutomatically({ lat, lon }) {
+// --- FUNÇÃO DE CORES (MAPA DE CALOR) ---
+const getCorPorTaxa = (taxa) => {
+  const min = 0; const max = 200; 
+  let valor = taxa;
+  if (valor > max) valor = max;
+  if (valor < min) valor = min;
+  const hue = (valor / max) * 120; 
+  return `hsl(${hue}, 100%, 50%)`;
+}
+
+// --- CÂMERA INTELIGENTE ---
+function ControladorCamera({ lat, lon, rastro }) {
   const map = useMap()
+  const tamanhoAnterior = useRef(0)
+
   useEffect(() => {
-    if (lat !== 0 && lon !== 0) {
-      map.setView([lat, lon], map.getZoom())
+    if (!map) return;
+    const tamanhoAtual = rastro ? rastro.length : 0;
+    const diferenca = Math.abs(tamanhoAtual - tamanhoAnterior.current);
+
+    if (diferenca > 2 && rastro.length > 1) {
+      const bounds = L.latLngBounds(rastro.map(p => [p.lat, p.lon]))
+      map.flyToBounds(bounds, { padding: [50, 50], duration: 1.5 })
+    } else if (lat !== 0 && lon !== 0) {
+      map.panTo([lat, lon], { animate: true, duration: 1.0 })
     }
-  }, [lat, lon, map])
+    tamanhoAnterior.current = tamanhoAtual;
+  }, [rastro, lat, lon, map])
+
   return null
 }
 
-// FUNÇÃO QUE ESCOLHE A COR BASEADA NA TAXA (META = 100 L/ha)
-// Você pode ajustar esses valores conforme sua Meta real
-function getColor(taxa) {
-  if (taxa < 10) return '#bdc3c7' // Cinza (Parado ou desligado)
-  if (taxa < 90) return '#f1c40f' // Amarelo (Aplicando Pouco)
-  if (taxa > 110) return '#e74c3c' // Vermelho (Aplicando Muito)
-  return '#2ecc71'                // Verde (Ideal: entre 90 e 110)
-}
-
-export function Mapa({ lat, lon, rastro }) {
-  const posicaoInicial = (lat !== 0 && lon !== 0) ? [lat, lon] : [-15.79, -47.88]
-  const zoomInicial = (lat !== 0 && lon !== 0) ? 18 : 4
+export function Mapa({ lat, lon, rastro, nomeTrator, velocidade }) {
+  const position = [lat || -14.2350, lon || -51.9253]
 
   return (
-    <div style={{ height: "100%", width: "100%" }}>
-      <MapContainer center={posicaoInicial} zoom={zoomInicial} style={{ height: "100%", width: "100%" }} zoomControl={false}>
-        
-        {/* MAPA DE SATÉLITE */}
-        <TileLayer
-          url="http://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
-          subdomains={['mt0', 'mt1', 'mt2', 'mt3']}
-          attribution='&copy; Google Maps'
+    <MapContainer center={position} zoom={15} style={{ height: '100%', width: '100%' }}>
+      
+      <TileLayer
+        url="http://mt0.google.com/vt/lyrs=y&hl=pt-br&x={x}&y={y}&z={z}"
+        attribution='&copy; Google Maps'
+        maxNativeZoom={20} maxZoom={22}
+      />
+
+      <ControladorCamera lat={lat} lon={lon} rastro={rastro} />
+
+      {/* Rastro Colorido */}
+      {rastro.map((ponto, index) => (
+        <Circle 
+          key={index}
+          center={[ponto.lat, ponto.lon]}
+          pathOptions={{ 
+            color: getCorPorTaxa(ponto.taxa), 
+            fillColor: getCorPorTaxa(ponto.taxa), 
+            fillOpacity: 0.6, weight: 0 
+          }}
+          radius={3} 
         />
+      ))}
 
-        {/* --- DESENHO DO RASTRO COLORIDO --- */}
-        {rastro && rastro.map((ponto, index) => (
-          <CircleMarker 
-            key={index}
-            center={[ponto.lat, ponto.lon]}
-            radius={4} // Tamanho da bolinha
-            pathOptions={{ 
-              color: getColor(ponto.taxa), // Cor da borda
-              fillColor: getColor(ponto.taxa), // Cor do preenchimento
-              fillOpacity: 0.7,
-              stroke: false // Sem borda grossa
-            }}
-          >
-            <Popup>
-              Taxa: {ponto.taxa.toFixed(1)} L/ha <br/>
-              Lat: {ponto.lat.toFixed(5)} <br/>
-              Lon: {ponto.lon.toFixed(5)}
-            </Popup>
-          </CircleMarker>
-        ))}
+      {/* TRATOR COM TOOLTIP (TEXTO AO PASSAR O MOUSE) */}
+      {lat !== 0 && lon !== 0 && (
+        <Marker position={[lat, lon]} icon={tratorIcon}>
+          <Tooltip direction="top" offset={[0, -20]} opacity={1}>
+             <div style={{textAlign: 'center'}}>
+               <strong style={{fontSize: 14}}>🚜 {nomeTrator}</strong><br/>
+               <span style={{fontSize: 12}}>⚡ {velocidade} km/h</span>
+             </div>
+          </Tooltip>
+        </Marker>
+      )}
 
-        {/* MARCADOR DO TRATOR ATUAL */}
-        {lat !== 0 && lon !== 0 && (
-          <Marker position={[lat, lon]} icon={tractorIcon} zIndexOffset={1000}>
-            <Popup>Trator Operando Aqui!</Popup>
-          </Marker>
-        )}
-
-        <RecenterAutomatically lat={lat} lon={lon} />
-      </MapContainer>
-    </div>
+    </MapContainer>
   )
 }
