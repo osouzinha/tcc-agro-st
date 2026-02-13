@@ -176,7 +176,7 @@ function App() {
                 <button 
                   onClick={enviarComando} 
                   className="btn-comando"
-                  style={{background: isOnline ? '#f39c12' : '#7f8c8d', cursor: isOnline ? 'pointer' : 'not-allowed'}}
+                  disabled={!isOnline} 
                 >
                   {isOnline ? 'DEFINIR' : 'OFFLINE'}
                 </button>

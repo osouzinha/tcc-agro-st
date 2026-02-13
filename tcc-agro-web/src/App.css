@@ -123,7 +123,7 @@ h1 {
 
 .btn-comando {
   width: 40%;
-  background: #1565C0; /* Azul da Logo */
+  background: #1565C0; /* <-- Azul da sua logo */
   color: white;
   border: none;
   border-radius: 4px;
@@ -132,9 +132,15 @@ h1 {
   font-size: 12px;
   transition: background-color 0.2s;
 }
-.btn-comando:hover { background: #0D47A1; } /* Azul mais escuro */
-.btn-comando:disabled { background: #7f8c8d; cursor: not-allowed; }
 
+.btn-comando:hover { 
+  background: #0D47A1; /* Azul mais escuro quando passa o mouse */
+}
+
+.btn-comando:disabled { 
+  background: #7f8c8d; /* Fica cinza quando o trator está offline */
+  cursor: not-allowed; 
+}
 
 /* --- 5. BOTÕES DE AÇÃO --- */
 .botoes-acao {
