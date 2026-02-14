@@ -140,90 +140,112 @@ function App() {
   const listaFiltrada = listaNuvem.filter(i => abaAtiva==='auto'?i.tipo==='automatico':(i.tipo==='csv'||i.tipo==='manual'||!i.tipo));
 
   return (
-    <div className="dashboard-container">
-      <div className="sidebar">
-        <div className="header-content">
-          <h1><Tractor size={28} /> TCC Agro</h1>
-          
-          {!modoHistorico && (
-            <div style={{marginTop: 10}}>
-              <label style={{fontSize: 12, color: '#ccc'}}>VEÍCULO:</label>
-              <div style={{display:'flex', alignItems:'center', gap: 5}}>
-                <select value={tratorSelecionado} onChange={(e) => setTratorSelecionado(e.target.value)} className="trator-select">
-                  {listaTratores.map(t => <option key={t} value={t}>{t}</option>)}
-                </select>
-                {/* INDICADOR VISUAL DE ONLINE/OFFLINE */}
-                {isOnline ? <Wifi size={20} color="#2ecc71" /> : <WifiOff size={20} color="#e74c3c" />}
+    <div className="app-wrapper">
+      
+      {/* --- CABEÇALHO --- */}
+      <header className="app-header">
+        <div className="logo-area">
+          <Tractor size={24} color="white" />
+          <h1>TCC Agro</h1>
+        </div>
+        <div className="header-info">
+          <span>Usuário: <strong>Admin</strong></span>
+          <span>|</span>
+          <span>Status Sistema: <strong style={{color: '#2ecc71'}}>Operacional</strong></span>
+        </div>
+      </header>
+
+      {/* --- CONTEÚDO PRINCIPAL (Sidebar + Mapa) --- */}
+      <div className="dashboard-container">
+        <div className="sidebar">
+          <div className="header-content">
+            
+            {!modoHistorico && (
+              <div style={{marginTop: 5}}>
+                <label style={{fontSize: 12, color: '#ccc'}}>VEÍCULO:</label>
+                <div style={{display:'flex', alignItems:'center', gap: 5}}>
+                  <select value={tratorSelecionado} onChange={(e) => setTratorSelecionado(e.target.value)} className="trator-select">
+                    {listaTratores.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  {/* INDICADOR VISUAL DE ONLINE/OFFLINE */}
+                  {isOnline ? <Wifi size={20} color="#2ecc71" /> : <WifiOff size={20} color="#e74c3c" />}
+                </div>
               </div>
+            )}
+
+            {/* PAINEL DE COMANDO INTELIGENTE */}
+            {!modoHistorico && (
+              <div className="painel-comando" style={{opacity: isOnline ? 1 : 0.5}}>
+                <div style={{display:'flex', alignItems:'center', gap:5, marginBottom:5, color: '#1565C0'}}>
+                   <Settings size={14} /> <strong>Controle Remoto</strong>
+                </div>
+                <div style={{display:'flex', gap:5}}>
+                  <input 
+                    type="number" 
+                    value={metaAlvo} 
+                    onChange={(e) => setMetaAlvo(e.target.value)} 
+                    placeholder="L/ha"
+                    className="input-comando"
+                    disabled={!isOnline} // Bloqueia digitação se offline
+                  />
+                  <button 
+                    onClick={enviarComando} 
+                    className="btn-comando"
+                    disabled={!isOnline} 
+                  >
+                    {isOnline ? 'DEFINIR' : 'OFFLINE'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {modoHistorico && <div className="aviso-historico">⚠ MODO HISTÓRICO</div>}
+          </div>
+
+          {!modoHistorico && (
+            <div className="cards-grid">
+              <Card titulo="Taxa (L/ha)" valor={dados.taxa?.toFixed(1)} unidade="" icon={<Droplets size={20} />} cor={dados.taxa > 0 ? "#2ecc71" : "#7f8c8d"} />
+              <Card titulo="Velocidade" valor={dados.velocidade?.toFixed(1)} unidade="km/h" icon={<Gauge size={20} />} />
+              <Card titulo="Vazão" valor={dados.vazao?.toFixed(1)} unidade="L/min" icon={<Droplets size={20} />} />
             </div>
           )}
 
-          {/* PAINEL DE COMANDO INTELIGENTE */}
-          {!modoHistorico && (
-            <div className="painel-comando" style={{opacity: isOnline ? 1 : 0.5}}>
-              <div style={{display:'flex', alignItems:'center', gap:5, marginBottom:5, color: '#1565C0'}}>
-                 <Settings size={14} /> <strong>Controle Remoto</strong>
-              </div>
-              <div style={{display:'flex', gap:5}}>
-                <input 
-                  type="number" 
-                  value={metaAlvo} 
-                  onChange={(e) => setMetaAlvo(e.target.value)} 
-                  placeholder="L/ha"
-                  className="input-comando"
-                  disabled={!isOnline} // Bloqueia digitação se offline
-                />
-                <button 
-                  onClick={enviarComando} 
-                  className="btn-comando"
-                  disabled={!isOnline} 
-                >
-                  {isOnline ? 'DEFINIR' : 'OFFLINE'}
-                </button>
-              </div>
+          <hr className="divider" />
+          <div className="file-manager">
+            <div className="botoes-acao">
+               <label className="btn-upload"><Upload size={14} /> CSV <input type="file" accept=".csv" onChange={handleFileUpload} hidden /></label>
+               {(rastro.length > 0) && (<button onClick={salvarManual} className="btn-save"><Save size={14} /> Salvar</button>)}
+               {modoHistorico && <button onClick={voltarTempoReal} className="btn-back">❌ Voltar</button>}
             </div>
-          )}
-
-          {modoHistorico && <div className="aviso-historico">⚠ MODO HISTÓRICO</div>}
+            <div className="tabs">
+              <button className={abaAtiva === 'auto' ? 'tab active' : 'tab'} onClick={() => setAbaAtiva('auto')}><Calendar size={14} /> Diário Auto</button>
+              <button className={abaAtiva === 'importados' ? 'tab active' : 'tab'} onClick={() => setAbaAtiva('importados')}><FileText size={14} /> Importados</button>
+            </div>
+            <div className="history-list">
+               {listaFiltrada.map((item) => (
+                 <div key={item.id} className={`history-item ${item.tipo === 'automatico' ? 'auto-item' : 'manual-item'}`} onClick={() => abrirDaNuvem(item)}>
+                   <div className="info"><strong>{item.nome}</strong><span>📅 {item.data}</span></div>
+                   <button onClick={(e) => apagarDaNuvem(e, item.id)}><Trash2 size={14} /></button>
+                 </div>
+               ))}
+            </div>
+          </div>
         </div>
 
-        {!modoHistorico && (
-          <div className="cards-grid">
-            <Card titulo="Taxa (L/ha)" valor={dados.taxa?.toFixed(1)} unidade="" icon={<Droplets size={20} />} cor={dados.taxa > 0 ? "#2ecc71" : "#7f8c8d"} />
-            <Card titulo="Velocidade" valor={dados.velocidade?.toFixed(1)} unidade="km/h" icon={<Gauge size={20} />} />
-            <Card titulo="Vazão" valor={dados.vazao?.toFixed(1)} unidade="L/min" icon={<Droplets size={20} />} />
-          </div>
-        )}
-
-        <hr className="divider" />
-        <div className="file-manager">
-          <div className="botoes-acao">
-             <label className="btn-upload"><Upload size={14} /> CSV <input type="file" accept=".csv" onChange={handleFileUpload} hidden /></label>
-             {(rastro.length > 0) && (<button onClick={salvarManual} className="btn-save"><Save size={14} /> Salvar</button>)}
-             {modoHistorico && <button onClick={voltarTempoReal} className="btn-back">❌ Voltar</button>}
-          </div>
-          <div className="tabs">
-            <button className={abaAtiva === 'auto' ? 'tab active' : 'tab'} onClick={() => setAbaAtiva('auto')}><Calendar size={14} /> Diário Auto</button>
-            <button className={abaAtiva === 'importados' ? 'tab active' : 'tab'} onClick={() => setAbaAtiva('importados')}><FileText size={14} /> Importados</button>
-          </div>
-          <div className="history-list">
-             {listaFiltrada.map((item) => (
-               <div key={item.id} className={`history-item ${item.tipo === 'automatico' ? 'auto-item' : 'manual-item'}`} onClick={() => abrirDaNuvem(item)}>
-                 <div className="info"><strong>{item.nome}</strong><span>📅 {item.data}</span></div>
-                 <button onClick={(e) => apagarDaNuvem(e, item.id)}><Trash2 size={14} /></button>
-               </div>
-             ))}
+        <div className="map-area">
+          <Mapa lat={modoHistorico && rastro.length > 0 ? rastro[rastro.length-1].lat : (dados.lat || 0)} lon={modoHistorico && rastro.length > 0 ? rastro[rastro.length-1].lon : (dados.lon || 0)} rastro={rastro} nomeTrator={tratorSelecionado} velocidade={dados.velocidade?.toFixed(1)} />
+          <div className="map-overlay">
+             <div>TRATOR: <strong>{tratorSelecionado || '...'}</strong></div>
+             <div>STATUS: <strong style={{color: isOnline ? '#2ecc71' : '#e74c3c'}}>{isOnline ? 'ONLINE 🟢' : 'OFFLINE 🔴'}</strong></div>
           </div>
         </div>
       </div>
 
-      <div className="map-area">
-        <Mapa lat={modoHistorico && rastro.length > 0 ? rastro[rastro.length-1].lat : (dados.lat || 0)} lon={modoHistorico && rastro.length > 0 ? rastro[rastro.length-1].lon : (dados.lon || 0)} rastro={rastro} nomeTrator={tratorSelecionado} velocidade={dados.velocidade?.toFixed(1)} />
-        <div className="map-overlay">
-           <div>TRATOR: <strong>{tratorSelecionado || '...'}</strong></div>
-           <div>STATUS: <strong style={{color: isOnline ? '#2ecc71' : '#e74c3c'}}>{isOnline ? 'ONLINE 🟢' : 'OFFLINE 🔴'}</strong></div>
-        </div>
-      </div>
+      {/* --- RODAPÉ --- */}
+      <footer className="app-footer">
+        <p>&copy; {new Date().getFullYear()} TCC Agro - Sistema de Gestão de Frota e Aplicação em Taxa Variável.</p>
+      </footer>
+
     </div>
   )
 }
