@@ -8,10 +8,8 @@
 #include <addons/TokenHelper.h>
 #include <addons/RTDBHelper.h>
 
-// --- 1. IDENTIDADE DO TRATOR (MUDE AQUI) ---
-#define ID_TRATOR "Trator_01" 
+#define ID_TRATOR "Pulverizador_01" 
 
-// --- 2. CONFIGURAÇÕES ---
 #define API_KEY "AIzaSyCtLg3GKT4ROaF6u5YO9UZDuHwBmPUPXRI"
 #define DATABASE_URL "tcc-agro-st-default-rtdb.firebaseio.com"
 
@@ -20,7 +18,7 @@
 #define PIN_SENSOR_FLUXO 14 
 #define LED_STATUS 2 
 
-float larguraFaixa = 0.5;     
+float larguraFaixa = 1.0;     
 float fatorCalibracao = 98.0; 
 
 TinyGPSPlus gps;
@@ -28,7 +26,7 @@ HardwareSerial SerialGPS(1);
 WebServer server(80);
 Preferences preferences; 
 FirebaseData fbdo;
-FirebaseData fbdoLeitura; // Objeto extra só para ler dados sem travar o envio
+FirebaseData fbdoLeitura; 
 FirebaseAuth auth;
 FirebaseConfig config;
 
@@ -40,12 +38,10 @@ bool firebaseOnline = false;
 unsigned long botaoPressionadoTempo = 0;
 bool limpando = false;
 
-// Variável para guardar a meta recebida do site
 float metaTaxaAlvo = 0.0; 
 
 void IRAM_ATTR contarPulsos() { pulsosContados++; }
 
-// --- GRAVAÇÃO CSV ---
 void gravarInterno() {
   File file = LittleFS.open("/historico.csv", "a"); 
   if (!file) return;
@@ -56,19 +52,121 @@ void gravarInterno() {
   file.close();
 }
 
-// --- ESCANEAMENTO WI-FI ---
 String obterListaRedes() {
   int n = WiFi.scanNetworks();
-  String opcoes = "<option value=''>-- Selecione sua Rede --</option>";
+  String opcoes = "<option value=''>-- Selecione a Rede --</option>";
   for (int i = 0; i < n; ++i) opcoes += "<option value='" + WiFi.SSID(i) + "'>" + WiFi.SSID(i) + "</option>";
   return opcoes;
 }
 
-// --- PÁGINA WEB (192.168.4.1) ---
-void handleRoot() {
-  server.send(200, "text/html", "<h1>Painel " + String(ID_TRATOR) + "</h1><p>Acesse /config para Wi-Fi ou baixe o CSV.</p>");
+void handleDados() {
+  String json = "{";
+  json += "\"vazao\":" + String(vazaoLPM, 1) + ",";
+  json += "\"velocidade\":" + String(velocidadeKPH, 1) + ",";
+  json += "\"taxa\":" + String(taxaAplicacao, 1) + ",";
+  json += "\"meta\":" + String(metaTaxaAlvo, 1);
+  json += "}";
+  server.send(200, "application/json", json);
 }
-// (Mantive simplificado aqui para focar na lógica IoT, mas pode manter o HTML completo da versão anterior se quiser)
+
+void handleRoot() {
+  String html = "<!DOCTYPE html><html><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>";
+  html += "<style>body{font-family:sans-serif;margin:0;padding:0;background:#f4f4f9;}";
+  html += ".header{background:#1565C0;color:#fff;padding:15px;text-align:center;}";
+  html += ".container{padding:15px;}";
+  html += ".card{background:#fff;border-radius:8px;padding:15px;margin-bottom:15px;box-shadow:0 2px 4px rgba(0,0,0,0.1);}";
+  html += "input,select,button{padding:10px;margin:5px 0;width:100%;box-sizing:border-box;border:1px solid #ccc;border-radius:4px;}";
+  html += "button{background:#1565C0;color:white;border:none;cursor:pointer;}";
+  html += "button.btn-danger{background:#e74c3c;}";
+  html += "h1{margin:0;font-size:22px;} h3{margin-top:0;}</style>";
+  
+  html += "<script>";
+  html += "setInterval(function(){";
+  html += "fetch('/dados').then(response => response.json()).then(data => {";
+  html += "document.getElementById('val_vazao').innerText = data.vazao.toFixed(1);";
+  html += "document.getElementById('val_velocidade').innerText = data.velocidade.toFixed(1);";
+  html += "document.getElementById('val_taxa').innerText = data.taxa.toFixed(1);";
+  html += "document.getElementById('val_meta').innerText = data.meta.toFixed(1);";
+  html += "});}, 1000);";
+  html += "</script>";
+  
+  html += "</head><body>";
+  html += "<div class='header'><h1>Trator ST - TCC</h1></div>";
+  html += "<div class='container'>";
+
+  html += "<div class='card'><h3>Dados de Maquina</h3>";
+  html += "<p>Vazao: <b id='val_vazao'>" + String(vazaoLPM, 1) + "</b> L/min</p>";
+  html += "<p>Velocidade: <b id='val_velocidade'>" + String(velocidadeKPH, 1) + "</b> km/h</p>";
+  html += "<p>Taxa de Aplicacao: <b id='val_taxa'>" + String(taxaAplicacao, 1) + "</b> L/ha</p>";
+  html += "<p>Meta de Aplicacao: <b id='val_meta'>" + String(metaTaxaAlvo, 1) + "</b> L/ha</p>";
+  html += "</div>";
+
+  html += "<div class='card'><h3>Controle de Taxa</h3>";
+  html += "<form action='/meta' method='POST'>";
+  html += "<label>Definicao de Litro/Hectare:</label><br>";
+  html += "<input type='number' step='0.1' name='nova_meta' value='" + String(metaTaxaAlvo, 1) + "'>";
+  html += "<button type='submit'>Enviar Meta</button></form></div>";
+
+  html += "<div class='card'><h3>Arquivos CSV</h3>";
+  html += "<button onclick=\"window.location.href='/baixar'\">Transferir Arquivo</button>";
+  html += "<form action='/limpar' method='POST' style='margin-top:10px;'>";
+  html += "<button type='submit' class='btn-danger'>Deletar Arquivo</button></form></div>";
+
+  html += "<div class='card'><h3>Conexao de Roteador</h3>";
+  html += "<form action='/salvar' method='POST'>";
+  html += "<label>Rede Wi-Fi:</label><br>";
+  html += "<select name='ssid'>" + obterListaRedes() + "</select><br>";
+  html += "<label>Senha de Rede:</label><br>";
+  html += "<input type='password' name='pass'><br>";
+  html += "<button type='submit'>Salvar Credenciais</button></form></div>";
+
+  html += "</div></body></html>";
+  server.send(200, "text/html", html);
+}
+
+void handleMeta() {
+  if (server.hasArg("nova_meta")) {
+    metaTaxaAlvo = server.arg("nova_meta").toFloat();
+    server.sendHeader("Location", "/");
+    server.send(303);
+  } else {
+    server.send(400, "text/plain", "Erro de envio.");
+  }
+}
+
+void handleBaixar() {
+  File file = LittleFS.open("/historico.csv", "r");
+  if (!file) {
+    server.send(404, "text/plain", "Sem dados de arquivo.");
+    return;
+  }
+  server.streamFile(file, "text/csv");
+  file.close();
+}
+
+void handleLimpar() {
+  LittleFS.remove("/historico.csv");
+  server.sendHeader("Location", "/");
+  server.send(303);
+}
+
+void handleSalvar() {
+  if (server.hasArg("ssid") && server.hasArg("pass")) {
+    String n_ssid = server.arg("ssid");
+    String n_pass = server.arg("pass");
+    
+    preferences.begin("wifi_config", false);
+    preferences.putString("ssid", n_ssid);
+    preferences.putString("pass", n_pass);
+    preferences.end();
+    
+    server.send(200, "text/html", "<h1>Dados de memoria. A placa de circuito reiniciara.</h1>");
+    delay(2000);
+    ESP.restart();
+  } else {
+    server.send(400, "text/html", "Erro de dados.");
+  }
+}
 
 void setup() {
   Serial.begin(115200);
@@ -95,14 +193,19 @@ void setup() {
   config.signer.test_mode = true;
   
   server.on("/", handleRoot);
+  server.on("/dados", HTTP_GET, handleDados);
+  server.on("/meta", HTTP_POST, handleMeta);
+  server.on("/baixar", HTTP_GET, handleBaixar);
+  server.on("/limpar", HTTP_POST, handleLimpar);
+  server.on("/salvar", HTTP_POST, handleSalvar);
   server.begin();
-  Serial.println("--- SISTEMA INICIADO: " + String(ID_TRATOR) + " ---");
+  
+  Serial.println("--- INICIO DE SISTEMA: " + String(ID_TRATOR) + " ---");
 }
 
 void loop() {
   server.handleClient();
   
-  // RESET FÍSICO
   if (digitalRead(0) == LOW) {
     if (botaoPressionadoTempo == 0) botaoPressionadoTempo = millis();
     if (millis() - botaoPressionadoTempo > 5000 && !limpando) {
@@ -113,7 +216,6 @@ void loop() {
     }
   } else { botaoPressionadoTempo = 0; }
 
-  // CONEXÃO FIREBASE
   if (!limpando && WiFi.status() == WL_CONNECTED) {
     digitalWrite(LED_STATUS, HIGH); 
     if (!firebaseOnline) {
@@ -128,35 +230,26 @@ void loop() {
 
   while (SerialGPS.available() > 0) gps.encode(SerialGPS.read());
 
-  // --- LOOP PRINCIPAL (1 SEGUNDO) ---
   if (millis() - tempoAnterior > 1000) {
     vazaoLPM = (float)pulsosContados / fatorCalibracao;
     if (gps.location.isValid()) velocidadeKPH = gps.speed.kmph(); else velocidadeKPH = 0.0;
     
-    // Simulação para testes (se tiver fluxo mas estiver parado)
-    // if (vazaoLPM > 0.1 && velocidadeKPH < 1.0) velocidadeKPH = 5.0;
-
     if (velocidadeKPH > 0.5) taxaAplicacao = (vazaoLPM * 600.0) / (velocidadeKPH * larguraFaixa);
     else taxaAplicacao = 0.0;
     
     gravarInterno();
     
-    // LOG
     Serial.print("["); Serial.print(ID_TRATOR); Serial.print("] ");
     Serial.print("Vazao: "); Serial.print(vazaoLPM);
-    Serial.print(" | Meta Atual: "); Serial.println(metaTaxaAlvo);
+    Serial.print(" | Meta: "); Serial.println(metaTaxaAlvo);
 
-    // ENVIO E RECEBIMENTO FIREBASE
     if (firebaseOnline && Firebase.ready()) {
        String caminho = "/frota/" + String(ID_TRATOR);
 
-       // 1. ENVIA DADOS
        Firebase.setFloat(fbdo, caminho + "/vazao", vazaoLPM);
        Firebase.setFloat(fbdo, caminho + "/velocidade", velocidadeKPH);
        Firebase.setFloat(fbdo, caminho + "/taxa", taxaAplicacao);
        
-       // *** CORAÇÃO DO SISTEMA (HEARTBEAT) ***
-       // Envia o tempo atual para o site saber que estamos online
        Firebase.setInt(fbdo, caminho + "/ts", millis()); 
 
        if (gps.location.isValid()) {
@@ -164,14 +257,11 @@ void loop() {
           Firebase.setFloat(fbdo, caminho + "/lon", gps.location.lng());
        }
 
-       // 2. LÊ COMANDOS DO SITE (Telemetria Reversa)
-       // Verifica se existe uma nova meta na nuvem
        if (Firebase.getFloat(fbdoLeitura, caminho + "/comando/meta_taxa")) {
           float novaMeta = fbdoLeitura.floatData();
           if (novaMeta > 0 && novaMeta != metaTaxaAlvo) {
              metaTaxaAlvo = novaMeta;
-             Serial.println(">>> NOVO COMANDO RECEBIDO: META " + String(metaTaxaAlvo) + " L/ha <<<");
-             // Aqui você colocaria o código para controlar o motor/servo da válvula
+             Serial.println(">>> COMANDO: META " + String(metaTaxaAlvo) + " L/ha <<<");
           }
        }
     }
