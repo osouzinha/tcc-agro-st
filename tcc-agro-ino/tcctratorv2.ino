@@ -19,7 +19,7 @@
 #define LED_STATUS 2 
 
 float larguraFaixa = 1.0;     
-float fatorCalibracao = 3.0; 
+float fatorCalibracao = 22.0; 
 
 TinyGPSPlus gps;
 HardwareSerial SerialGPS(1);
