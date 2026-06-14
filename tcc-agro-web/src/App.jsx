@@ -68,7 +68,7 @@ function App() {
           setTratorSelecionado(nomes[0]);
       }
     });
-  }, [tratorSelecionado]);
+  }, []); // <- AGORA VAZIO, RODA APENAS UMA VEZ AO CARREGAR A TELA
 
   // 2. MONITORAMENTO + CHECK DE SEGURANÇA (HEARTBEAT)
   useEffect(() => {
