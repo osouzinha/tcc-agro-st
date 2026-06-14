@@ -59,16 +59,24 @@ function App() {
   // 1. DESCOBRIR FROTA
   useEffect(() => {
     const frotaRef = ref(db, "frota");
+
     onValue(frotaRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
         const nomes = Object.keys(data);
         setListaTratores(nomes);
-        if (!tratorSelecionado && nomes.length > 0)
-          setTratorSelecionado(nomes[0]);
+
+        // --- A MÁGICA ESTÁ AQUI ---
+        // Em vez de olhar a variável antiga, pedimos ao React para checar o valor em tempo real (prev)
+        setTratorSelecionado((prev) => {
+          if (!prev && nomes.length > 0) {
+            return nomes[0]; // Só define o 1º se realmente estiver vazio
+          }
+          return prev; // Se já tiver um selecionado, não faz nada!
+        });
       }
     });
-  }, []); // <- AGORA VAZIO, RODA APENAS UMA VEZ AO CARREGAR A TELA
+  }, []);
 
   // 2. MONITORAMENTO + CHECK DE SEGURANÇA (HEARTBEAT)
   useEffect(() => {
