@@ -17,18 +17,24 @@ const tratorIcon = new L.Icon({
   shadowUrl: iconShadow,
   iconSize: [50, 50],
   iconAnchor: [25, 25],
-  popupAnchor: [0, -40], // Ajustei para o balão aparecer acima do trator
+  popupAnchor: [0, -40],
 });
 
-// --- FUNÇÃO DE CORES (MAPA DE CALOR) ---
-const getCorPorTaxa = (taxa) => {
-  const min = 0;
-  const max = 200;
-  let valor = taxa;
-  if (valor > max) valor = max;
-  if (valor < min) valor = min;
-  const hue = (valor / max) * 120;
-  return `hsl(${hue}, 100%, 50%)`;
+// --- FUNÇÃO DE CORES (AGRONÔMICA BASEADA NA META) ---
+const getCorPorTaxa = (taxa, meta) => {
+  // Se a meta for zero ou não existir, deixa azul por padrão
+  if (!meta || meta <= 0) return "#3498db";
+
+  const limiteSuperior = meta * 1.1; // Passou 10% da meta
+  const limiteInferior = meta * 0.9; // Faltou 10% da meta
+
+  if (taxa > limiteSuperior) {
+    return "#e74c3c"; // Vermelho: Excesso de produto
+  } else if (taxa < limiteInferior) {
+    return "#f1c40f"; // Amarelo: Subdosagem (Falta produto)
+  } else {
+    return "#2ecc71"; // Verde: Aplicação Perfeita!
+  }
 };
 
 // --- CÂMERA INTELIGENTE ---
@@ -53,7 +59,8 @@ function ControladorCamera({ lat, lon, rastro }) {
   return null;
 }
 
-export function Mapa({ lat, lon, rastro, nomeTrator, velocidade }) {
+// ATENÇÃO: Adicionamos a "meta" aqui nos parâmetros (props)
+export function Mapa({ lat, lon, rastro, nomeTrator, velocidade, meta }) {
   const position = [lat || -14.235, lon || -51.9253];
 
   return (
@@ -71,20 +78,19 @@ export function Mapa({ lat, lon, rastro, nomeTrator, velocidade }) {
 
       <ControladorCamera lat={lat} lon={lon} rastro={rastro} />
 
-      {/* Rastro Colorido com Tooltip */}
+      {/* Rastro Colorido Dinâmico */}
       {rastro.map((ponto, index) => (
         <Circle
           key={index}
           center={[ponto.lat, ponto.lon]}
           pathOptions={{
-            color: getCorPorTaxa(ponto.taxa),
-            fillColor: getCorPorTaxa(ponto.taxa),
-            fillOpacity: 0.8, // Aumentei a opacidade para a cor ficar mais viva
+            color: getCorPorTaxa(ponto.taxa, meta), // Usando a meta para julgar a cor
+            fillColor: getCorPorTaxa(ponto.taxa, meta),
+            fillOpacity: 0.9,
             weight: 0,
           }}
-          radius={4} // Aumentei de 3 para 4 para o mouse "acertar" a bolinha mais fácil
+          radius={5} // Aumentei um pouquinho mais para dar destaque
         >
-          {/* Balão que aparece ao passar o mouse */}
           <Tooltip direction="top" opacity={0.9}>
             <div style={{ textAlign: "center", lineHeight: "1.4" }}>
               <strong style={{ color: "#2980b9" }}>💧 Taxa:</strong>{" "}
@@ -101,7 +107,6 @@ export function Mapa({ lat, lon, rastro, nomeTrator, velocidade }) {
         </Circle>
       ))}
 
-      {/* TRATOR COM TOOLTIP (TEXTO AO PASSAR O MOUSE) */}
       {lat !== 0 && lon !== 0 && (
         <Marker position={[lat, lon]} icon={tratorIcon}>
           <Tooltip direction="top" offset={[0, -20]} opacity={1}>

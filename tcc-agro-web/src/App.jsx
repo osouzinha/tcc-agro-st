@@ -32,16 +32,29 @@ function App() {
   const [rastro, setRastro] = useState([]);
   const [modoHistorico, setModoHistorico] = useState(false);
   const [listaNuvem, setListaNuvem] = useState([]);
-  const [statusAutoSave, setStatusAutoSave] = useState("Aguardando...");
   const [abaAtiva, setAbaAtiva] = useState("auto");
   const [origemDados, setOrigemDados] = useState("live");
 
   // CONTROLE E SEGURANÇA
   const [metaAlvo, setMetaAlvo] = useState(100);
-  const [lastSeen, setLastSeen] = useState(0); // Hora da última mensagem recebida
-  const [isOnline, setIsOnline] = useState(false); // Estado calculado
+  const [lastSeen, setLastSeen] = useState(0);
+  const [isOnline, setIsOnline] = useState(false);
 
   const rastroRef = useRef(rastro);
+
+  // --- FUNÇÃO MOVIDA PARA CIMA PARA NÃO DAR ERRO NO REACT ---
+  function executarAutoSave(pontosAtuais) {
+    if (pontosAtuais.length === 0) return;
+    const hoje = new Date().toISOString().split("T")[0];
+    const idArquivo = `AUTO_${tratorSelecionado}_${hoje}`;
+    set(ref(db, `historico/${idArquivo}`), {
+      nome: `[AUTO] ${tratorSelecionado} - ${hoje}`,
+      trator: tratorSelecionado,
+      data: new Date().toLocaleString(),
+      pontos: pontosAtuais,
+      tipo: "automatico",
+    });
+  }
 
   // 1. DESCOBRIR FROTA
   useEffect(() => {
@@ -55,7 +68,7 @@ function App() {
           setTratorSelecionado(nomes[0]);
       }
     });
-  }, []);
+  }, [tratorSelecionado]);
 
   // 2. MONITORAMENTO + CHECK DE SEGURANÇA (HEARTBEAT)
   useEffect(() => {
@@ -71,13 +84,9 @@ function App() {
       const data = snapshot.val();
       if (data) {
         setDados(data);
-
-        // --- ATUALIZA STATUS ONLINE ---
-        // Toda vez que chega dado novo, atualizamos o relógio
         setLastSeen(Date.now());
         setIsOnline(true);
 
-        // RASTRO E AUTO-SAVE
         if (!modoHistorico && data.lat && data.lon && data.lat !== 0) {
           const horaAtual = new Date().toLocaleTimeString();
           setRastro((prev) => {
@@ -103,13 +112,12 @@ function App() {
       }
     });
     return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tratorSelecionado, modoHistorico, origemDados]);
 
   // 3. WATCHDOG (CÃO DE GUARDA)
-  // Verifica a cada 1 segundo se o trator parou de falar
   useEffect(() => {
     const interval = setInterval(() => {
-      // Se passou mais de 5 segundos (5000ms) sem dados, marca como OFFLINE
       if (Date.now() - lastSeen > 5000) {
         setIsOnline(false);
       }
@@ -117,38 +125,18 @@ function App() {
     return () => clearInterval(interval);
   }, [lastSeen]);
 
-  const executarAutoSave = (pontosAtuais) => {
-    if (pontosAtuais.length === 0) return;
-    const hoje = new Date().toISOString().split("T")[0];
-    const idArquivo = `AUTO_${tratorSelecionado}_${hoje}`;
-    setStatusAutoSave("Salvando...");
-    set(ref(db, `historico/${idArquivo}`), {
-      nome: `[AUTO] ${tratorSelecionado} - ${hoje}`,
-      trator: tratorSelecionado,
-      data: new Date().toLocaleString(),
-      pontos: pontosAtuais,
-      tipo: "automatico",
-    })
-      .then(() => setStatusAutoSave("Salvo na Nuvem ✅"))
-      .catch(() => setStatusAutoSave("Erro ❌"));
-  };
-
   // --- FUNÇÃO DE COMANDO SEGURA ---
   const enviarComando = () => {
     if (!tratorSelecionado) return;
-
-    // AQUI ESTÁ A PROTEÇÃO:
     if (!isOnline) {
       alert(
         `⛔ ERRO DE SEGURANÇA\n\nO ${tratorSelecionado} está OFFLINE.\nNão é possível enviar comandos para um veículo desconectado.`,
       );
-      return; // Cancela tudo e não envia
+      return;
     }
-
     const confirmacao = confirm(
       `CONFIRMAÇÃO DE COMANDO:\n\nVeículo: ${tratorSelecionado}\nNova Meta: ${metaAlvo} L/ha\nStatus: ONLINE 🟢\n\nDeseja aplicar?`,
     );
-
     if (confirmacao) {
       set(ref(db, `frota/${tratorSelecionado}/comando`), {
         meta_taxa: parseFloat(metaAlvo),
@@ -171,6 +159,7 @@ function App() {
         tipo: origemDados === "csv" ? "csv" : "manual",
       });
   };
+
   const handleFileUpload = (e) => {
     const f = e.target.files[0];
     if (!f) return;
@@ -184,12 +173,9 @@ function App() {
           const la = parseFloat(c[4]);
           const lo = parseFloat(c[5]);
           const t = parseFloat(c[3]);
-          // ADICIONAMOS A LEITURA DA VELOCIDADE AQUI:
-          // Nota: assumi que a velocidade está na coluna 2 (c[2]). Se no seu CSV estiver em outra, é só mudar o número!
           const vel = parseFloat(c[2]);
 
           if (!isNaN(la) && la !== 0) {
-            // AGORA SALVAMOS A VELOCIDADE NO RASTRO
             n.push({ lat: la, lon: lo, taxa: t, velocidade: vel, hora: "CSV" });
           }
         }
@@ -200,15 +186,18 @@ function App() {
     };
     r.readAsText(f);
   };
+
   const abrirDaNuvem = (i) => {
     setRastro(i.pontos);
     setModoHistorico(true);
     setOrigemDados(i.tipo === "csv" ? "csv" : "live");
   };
+
   const apagarDaNuvem = (e, id) => {
     e.stopPropagation();
     if (confirm("Apagar?")) remove(ref(db, `historico/${id}`));
   };
+
   const voltarTempoReal = () => {
     setRastro([]);
     setModoHistorico(false);
@@ -228,6 +217,7 @@ function App() {
       else setListaNuvem([]);
     });
   }, []);
+
   const listaFiltrada = listaNuvem.filter((i) =>
     abaAtiva === "auto"
       ? i.tipo === "automatico"
@@ -236,7 +226,6 @@ function App() {
 
   return (
     <div className="app-wrapper">
-      {/* --- CABEÇALHO --- */}
       <header className="app-header">
         <div className="logo-area">
           <Tractor size={24} color="white" />
@@ -254,7 +243,6 @@ function App() {
         </div>
       </header>
 
-      {/* --- CONTEÚDO PRINCIPAL (Sidebar + Mapa) --- */}
       <div className="dashboard-container">
         <div className="sidebar">
           <div className="header-content">
@@ -273,7 +261,6 @@ function App() {
                       </option>
                     ))}
                   </select>
-                  {/* INDICADOR VISUAL DE ONLINE/OFFLINE */}
                   {isOnline ? (
                     <Wifi size={20} color="#2ecc71" />
                   ) : (
@@ -283,7 +270,6 @@ function App() {
               </div>
             )}
 
-            {/* PAINEL DE COMANDO INTELIGENTE */}
             {!modoHistorico && (
               <div
                 className="painel-comando"
@@ -307,7 +293,7 @@ function App() {
                     onChange={(e) => setMetaAlvo(e.target.value)}
                     placeholder="L/ha"
                     className="input-comando"
-                    disabled={!isOnline} // Bloqueia digitação se offline
+                    disabled={!isOnline}
                   />
                   <button
                     onClick={enviarComando}
@@ -421,6 +407,7 @@ function App() {
             rastro={rastro}
             nomeTrator={tratorSelecionado}
             velocidade={dados.velocidade?.toFixed(1)}
+            meta={metaAlvo}
           />
           <div className="map-overlay">
             <div>
@@ -436,7 +423,6 @@ function App() {
         </div>
       </div>
 
-      {/* --- RODAPÉ --- */}
       <footer className="app-footer">
         <p>
           &copy; {new Date().getFullYear()} TCC Agro - Sistema de Gestão de
